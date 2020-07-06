@@ -1,6 +1,6 @@
 import sys
 from functools import wraps
-from flask import request, jsonify, abort
+from flask import request, jsonify, abort, render_template
 from .models import Host, Game, Player, Registration
 
 PAGE_LENGTH = 10
@@ -18,6 +18,10 @@ def requires_auth(auth):
 
 
 def register_views(app):
+
+    @app.route('/')
+    def index():
+        return render_template('index.html')
 
     @app.route('/games', methods=['GET'])
     def games():
@@ -203,7 +207,7 @@ def register_views(app):
             })
 
     @app.route('/game/unregister<int:game_id>', methods=['DELETE'])
-    @requires_auth('unregister:game')
+    @requires_auth('join:game')
     def unregister(jwt, game_id):
         # @TODO update this once i get it working
         player_id = jwt.get('player_id')

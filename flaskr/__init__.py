@@ -3,6 +3,7 @@ from flask import Flask
 from flask_cors import CORS
 from .models import setup_db
 from .controllers import register_views
+from .auth import setup_auth
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -12,7 +13,7 @@ def create_app(test_config=None):
         app.config.from_object(test_config)
 
     dbpath = os.environ.get('DATABASE_URL')
-
+    app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
     setup_db(app, dbpath)
 
     CORS(app)
@@ -25,5 +26,6 @@ def create_app(test_config=None):
         return response
 
     register_views(app)
+    setup_auth(app)
 
     return app
