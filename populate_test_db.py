@@ -43,15 +43,17 @@ def do_it(db_url, ngames=10):
     engine = create_engine(db_url, echo=False)
     session = sessionmaker(bind=engine)()
 
+    # get some fake auth0 ids ready
+    ids = (f"auth0|{i}" for i in range(1000))
     # --------------------------------------------
     # add players and hosts
     players = [
-        Player(name=name, email=f"{name}@gmail.com")
+        Player(id=next(ids), name=name, email=f"{name}@gmail.com")
         for name in PLAYER_NAMES
     ]
 
     hosts = [
-        Host(name=name, email=f"{name}@gmail.com")
+        Host(id=next(ids), name=name, email=f"{name}@gmail.com")
         for name in HOST_NAMES
     ]
 

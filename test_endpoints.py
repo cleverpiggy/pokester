@@ -12,19 +12,23 @@ from flaskr.models import Host, Game, Player, Registration
 # response.json
 
 @pytest.fixture(scope='module')
-def client():
+def app():
     db_url = 'postgresql://cleverpiggy@localhost:5432/pokester_test_db'
     os.environ['DATABASE_URL'] = db_url
     os.system('dropdb pokester_test_db')
     os.system('createdb pokester_test_db')
 
-    app = create_app({
-        'TESTING': True
-    })
+    app = create_app('test_config_without_auth')
     populate_test_db.do_it(db_url)
     app.app_context().push()
-    c = app.test_client()
-    return c
+    return app
+
+
+@pytest.fixture(scope='module')
+def client(app):
+    return app.test_client()
+
+
 
 
 def test_games(client):
@@ -41,19 +45,19 @@ def test_games(client):
 
 
 def test_players(client):
-    game = client.get('/games?page_length=1').json['games'][0]
-    num_registered = game['num_registered']
-    game_id = game['id']
+    game = Game.query.filter_by(num_registered=5).first()
+    num_registered = game.num_registered
+    game_id = game.id
     response = client.get(f'/game/players{game_id}')
 
     assert response.status_code == 200
     assert len(response.json['players']) == num_registered
 
 
-def test_create_game(client):
+def test_create_game(client, app):
 
     host = Host.query.first()
-    url = f'/game/create?host_id={host.id}'
+    url = f'/game/create?user_id={host.id}'
 
     # Success ----------------------------------------------------------
     # @TODO once i get jwts working i will get host id from there (i hope)
@@ -98,7 +102,7 @@ def test_join_game(client):
     # Success ----------------------------------------------------------
     game = Game.query.filter_by(num_registered=0).first()
     assert game
-    url = f'/game/join/{game.id}?player_id={player_id}'
+    url = f'/game/join/{game.id}?user_id={player_id}'
 
     # Use these to check on the game after request.
     num_registered = game.num_registered
@@ -119,14 +123,14 @@ def test_join_game(client):
     assert response.status_code == 422
 
     # game not found
-    response = client.post(f'/game/join/9999?player_id={player_id}')
+    response = client.post(f'/game/join/9999?user_id={player_id}')
     assert response.status_code == 404
 
     # full game
     game = Game.query.filter(Game.max_players == Game.num_registered).\
                       join(Registration).\
                       filter(Registration.player_id != player_id).first()
-    response = client.post(f'/game/join/{game.id}?player_id={player_id}')
+    response = client.post(f'/game/join/{game.id}?user_id={player_id}')
     assert response.status_code == 422
 
 
@@ -139,7 +143,7 @@ def test_delete_game(client):
     assert game
     game_id = game.id
 
-    url = f'/game{game_id}?host_id={host_id}'
+    url = f'/game{game_id}?user_id={host_id}'
     response = client.delete(url)
     assert response.status_code == 200
     game = Game.query.get(game_id)
@@ -150,7 +154,7 @@ def test_delete_game(client):
     game = Game.query.filter(
         Game.num_registered == 0,
         Game.host_id != host_id).first()
-    response = client.delete(f'/game{game.id}?host_id={host_id}')
+    response = client.delete(f'/game{game.id}?user_id={host_id}')
     assert response.status_code == 403
 
 def test_edit_game(client):
@@ -160,12 +164,11 @@ def test_edit_game(client):
     # Success ----------------------------------------------------------
     game = Game.query.filter_by(host_id=host_id).first()
     game_id = game.id
-    url = f'/game/edit{game_id}?host_id={host_id}'
+    url = f'/game/edit{game_id}?user_id={host_id}'
     #throw out microseconds because client/jsonify automatically
     #curtails datetime for some reason
     new_time = game.start_time.replace(microsecond=0) + timedelta(days=+1)
     response = client.patch(url, json={'start_time': new_time})
-
     assert response.status_code == 200
     game = Game.query.get(game_id)
     assert game.start_time == new_time
@@ -173,7 +176,7 @@ def test_edit_game(client):
     # Failures -------------------------------------------------------
     # host doesn't own game
     wrong_game = Game.query.filter(Game.host_id != host_id).first()
-    wrong_url = f'/game/edit{wrong_game.id}?host_id={host_id}'
+    wrong_url = f'/game/edit{wrong_game.id}?user_id={host_id}'
     response = client.patch(wrong_url, json={'start_time': new_time})
     assert response.status_code == 403
 
@@ -187,10 +190,10 @@ def test_unregister(client):
     reg = Registration.query.filter(Registration.player_id == player_id).first()
     reg_id = reg.id
     game = Game.query.get(reg.game_id)
-    game_id= game.id
+    game_id = game.id
     num_reged = game.num_registered
 
-    url = f'/game/unregister{game_id}?player_id={player_id}'
+    url = f'/game/unregister{game_id}?user_id={player_id}'
     # Success ----------------------------------------------------------
     response = client.delete(url)
 

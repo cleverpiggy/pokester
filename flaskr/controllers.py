@@ -1,25 +1,39 @@
 import sys
 from functools import wraps
-from flask import request, jsonify, abort, render_template
-from .models import Host, Game, Player, Registration
+from flask import request, jsonify, abort, render_template, redirect, url_for
+from .models import Host, Game, Player, Registration, rollback, close_session
+from .auth import requires_auth as req_auth
+from .auth import requires_auth_dummy
 
 PAGE_LENGTH = 10
 
 # placeholder
 # @TODO delete this
-def requires_auth(auth):
-    def requires_auth_decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            jwt = {}
-            return f(jwt, *args, **kwargs)
-        return wrapper
-    return requires_auth_decorator
+# def requires_auth(auth):
+#     def requires_auth_decorator(f):
+#         @wraps(f)
+#         def wrapper(*args, **kwargs):
+#             jwt = {}
+#             return f(jwt, *args, **kwargs)
+#         return wrapper
+#     return requires_auth_decorator
+
+def get_id(jwt_payload):
+    id_ = jwt_payload.get('sub')
+    #in case of testing without auth
+    if id_ is None:
+        id_ = request.args.get('user_id', type=str)
+    return id_
 
 
 def register_views(app):
 
-    @app.route('/')
+    if app.config.get('TEST_WITHOUT_AUTH'):
+        requires_auth = requires_auth_dummy
+    else:
+        requires_auth = req_auth
+
+    @app.route('/home')
     def index():
         return render_template('index.html')
 
@@ -31,6 +45,7 @@ def register_views(app):
         #     (but not full)
 
         # @TODO check out Model.paginate
+        # print (request.__dict__)
         page = request.args.get('page', 1, type=int)
         page_length = request.args.get("page_length", PAGE_LENGTH, type=int)
         offset = (page - 1) * page_length
@@ -40,7 +55,6 @@ def register_views(app):
             abort(404)
         games = q.limit(page_length).offset(offset)
         formatted_games = [g.format() for g in games]
-
         return jsonify({
             'success': True,
             'games': formatted_games
@@ -62,11 +76,8 @@ def register_views(app):
 
     @app.route('/game/create', methods=['POST'])
     @requires_auth('create:game')
-    def create_game(jwt):
+    def create_game(jwt_payload):
         # requires json with all game attributes
-        # the host id has to be in there somewhere as well
-        # -- the jwt?
-
         column_vals = {}
         for kword in ['start_time', 'max_players', 'platform']:
             value = request.json.get(kword)
@@ -75,21 +86,19 @@ def register_views(app):
                 abort(422)
             column_vals[kword] = value
 
-        # @TODO update this once i get it working
-        host_id = jwt.get('host_id')
-        if host_id is None:
-            host_id = int(request.args['host_id'])
+        host_id = get_id(jwt_payload)
 
         error = False
+
         try:
             game = Game(host_id=host_id, **column_vals)
             game.add()
         except Exception:
             error = True
-            game.rollback()
+            rollback()
             print(sys.exc_info())
         finally:
-            game.close_session()
+            close_session()
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
@@ -103,14 +112,10 @@ def register_views(app):
 
     @app.route('/game/join/<int:game_id>', methods=['POST'])
     @requires_auth('join:game')
-    def join_game(jwt, game_id):
-        # the user id has to be in the jwt
+    def join_game(jwt_payload, game_id):
+        # the user id has to be in the jwt_payload
 
-        # @TODO update this once i get it working
-        player_id = jwt.get('player_id')
-        if player_id is None:
-            # this is for testing @TODO write some kind of error
-            player_id = int(request.args['player_id'])
+        player_id = get_id(jwt_payload)
 
         game = Game.query.get(game_id)
         if game is None:
@@ -130,14 +135,14 @@ def register_views(app):
         error = False
         try:
             reg = Registration(player_id=player_id, game_id=game_id)
-            game.commit()
+            #this commits the game as well
             reg.add()
         except Exception:
             error = True
-            game.rollback()
+            rollback()
             print(sys.exc_info())
         finally:
-            reg.close_session()
+            close_session()
         if error:
             # This might happen if player_id isn't a real player
             # or ???
@@ -150,14 +155,12 @@ def register_views(app):
 
     @app.route('/game<int:game_id>', methods=['DELETE'])
     @requires_auth('delete:game')
-    def delete_game(jwt, game_id):
+    def delete_game(jwt_payload, game_id):
 
-        # @TODO update this once i get it working
-        host_id = jwt.get('host_id')
-        if host_id is None:
-            host_id = int(request.args['host_id'])
-
+        host_id = get_id(jwt_payload)
         game = Game.query.get(game_id)
+        if game is None:
+            abort(404)
         if game.host_id != host_id:
             abort(403)
         game.delete()
@@ -169,32 +172,34 @@ def register_views(app):
 
     @app.route('/game/edit<int:game_id>', methods=['PATCH'])
     @requires_auth('edit:game')
-    def edit_game(jwt, game_id):
-        # @TODO update this once i get it working
-        host_id = jwt.get('host_id')
-        if host_id is None:
-            host_id = int(request.args['host_id'])
+    def edit_game(jwt_payload, game_id):
+
+        host_id = get_id(jwt_payload)
 
         game = Game.query.get(game_id)
+        if game is None:
+            abort(404)
         if game.host_id != host_id:
             abort(403)
 
-        for kword in ['start_time', 'max_players', 'platform']:
-            val = request.json.get(kword)
-            if val:
-                setattr(game, kword, val)
+        # for kword in ['start_time', 'max_players', 'platform']:
+        #     val = request.json.get(kword)
+        #     if val:
+        #         setattr(game, kword, val)
+
+        updates = {k: request.json[k] for k in ['start_time', 'max_players', 'platform'] if k in request.json}
 
         error = False
         try:
-            game.commit()
+            game.update(updates)
             # format may not work before commit because of string/datetime coersion
             formatted_game = game.format()
         except Exception:
             error = True
-            game.rollback()
+            rollback()
             print(sys.exc_info())
         finally:
-            game.close_session()
+            close_session()
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
@@ -208,23 +213,19 @@ def register_views(app):
 
     @app.route('/game/unregister<int:game_id>', methods=['DELETE'])
     @requires_auth('join:game')
-    def unregister(jwt, game_id):
-        # @TODO update this once i get it working
-        player_id = jwt.get('player_id')
-        if player_id is None:
-            # this is for testing @TODO write some kind of error
-            player_id = int(request.args['player_id'])
+    def unregister(jwt_payload, game_id):
 
+        player_id = get_id(jwt_payload)
 
         reg = Registration.query.filter_by(game_id=game_id, player_id=player_id).one_or_none()
         if reg is None:
             abort(404)
         game = Game.query.get(game_id)
         game.num_registered -= 1
-        game.commit()
-        formatted_game = game.format()
+        #this commits
         reg.delete()
-        reg.close_session()
+        formatted_game = game.format()
+        close_session()
 
         return jsonify({
             'success': True,

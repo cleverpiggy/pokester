@@ -15,6 +15,16 @@ def setup_db(app, database_path):
     db.create_all()
 
 
+def commit():
+    db.session.commit()
+
+def rollback():
+    db.session.rollback()
+
+def close_session():
+    db.session.close()
+
+
 class BaseModel(db.Model):
     __abstract__ = True
 
@@ -29,23 +39,18 @@ class BaseModel(db.Model):
         db.session.delete(self)
         db.session.commit()
 
-    @staticmethod
-    def commit():
+    def update(self, mapping=None, **kwargs):
+        if mapping is None:
+            kwargs = mapping
+        for k, v in mapping.items():
+            setattr(self, k, v)
         db.session.commit()
-
-    @staticmethod
-    def rollback():
-        db.session.rollback()
-
-    @staticmethod
-    def close_session():
-        db.session.close()
 
 
 class Host(BaseModel):
     __tablename__ = 'host'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(String(40), primary_key=True)
     name = Column(String(50), nullable=False)
     email = Column(String(50), nullable=False)
 
@@ -69,7 +74,7 @@ class Game(BaseModel):
                          nullable=False)
     num_registered = Column(Integer, default=0, nullable=False)
     platform = Column(String(50), nullable=False)
-    host_id = Column(Integer, ForeignKey('host.id'), nullable=False)
+    host_id = Column(String, ForeignKey('host.id'), nullable=False)
     #when deleteing the game, we want all entries in the registry to delete
     registrations = db.relationship('Registration', backref='game', lazy=True,
                                     cascade='all, delete-orphan')
@@ -90,7 +95,7 @@ class Game(BaseModel):
 class Player(BaseModel):
     __tablename__ = 'player'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(String, primary_key=True)
     name = Column(String(50), nullable=False)
     email = Column(String(50), nullable=False)
     registrations = db.relationship('Registration', backref='player', lazy=True,
@@ -113,7 +118,7 @@ class Registration(BaseModel):
 
     id = Column(Integer, primary_key=True)
     game_id = Column(Integer, ForeignKey('game.id'), nullable=False)
-    player_id = Column(Integer, ForeignKey('player.id'), nullable=False)
+    player_id = Column(String, ForeignKey('player.id'), nullable=False)
 
     def __repr__(self):
         return f'<Registry: game {self.game_id}, player {self.player_id}>'
