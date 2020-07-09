@@ -7,17 +7,6 @@ from .auth import requires_auth_dummy
 
 PAGE_LENGTH = 10
 
-# placeholder
-# @TODO delete this
-# def requires_auth(auth):
-#     def requires_auth_decorator(f):
-#         @wraps(f)
-#         def wrapper(*args, **kwargs):
-#             jwt = {}
-#             return f(jwt, *args, **kwargs)
-#         return wrapper
-#     return requires_auth_decorator
-
 def get_id(jwt_payload):
     id_ = jwt_payload.get('sub')
     #in case of testing without auth
@@ -91,7 +80,7 @@ def register_views(app):
 
         error = False
         try:
-            host = Host(host_id=host_id, **column_vals)
+            host = Host(id=host_id, **column_vals)
             host.add()
         except Exception:
             error = True
@@ -107,7 +96,7 @@ def register_views(app):
 
         return jsonify({
             'success': True,
-            'game': column_vals
+            'host': column_vals
             })
 
     @app.route('/host/edit', methods=['PATCH'])
@@ -139,7 +128,7 @@ def register_views(app):
 
         return jsonify({
             'success': True,
-            'game': formatted_host
+            'host': formatted_host
             })
 
     @app.route('/player/register', methods=['POST'])
@@ -159,7 +148,7 @@ def register_views(app):
 
         error = False
         try:
-            player = Player(player_id=player_id, **column_vals)
+            player = Player(id=player_id, **column_vals)
             player.add()
         except Exception:
             error = True
@@ -175,7 +164,7 @@ def register_views(app):
 
         return jsonify({
             'success': True,
-            'game': column_vals
+            'player': column_vals
             })
 
     @app.route('/player/edit', methods=['PATCH'])
@@ -207,7 +196,7 @@ def register_views(app):
 
         return jsonify({
             'success': True,
-            'game': formatted_player
+            'player': formatted_player
             })
 
     @app.route('/game/create', methods=['POST'])
