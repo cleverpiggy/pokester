@@ -74,6 +74,142 @@ def register_views(app):
             'players': formatted_players
             })
 
+    @app.route('/host/register', methods=['POST'])
+    @requires_auth('create:game')
+    def register_host(jwt_payload):
+        host_id = get_id(jwt_payload)
+        if Host.query.get(host_id):
+            'host already registered'
+            abort(403)
+        column_vals = {}
+        for kword in ['name', 'email']:
+            value = request.json.get(kword)
+            if value is None:
+                f'{kword} needed'
+                abort(422)
+            column_vals[kword] = value
+
+        error = False
+        try:
+            host = Host(host_id=host_id, **column_vals)
+            host.add()
+        except Exception:
+            error = True
+            rollback()
+            print(sys.exc_info())
+        finally:
+            close_session()
+
+        if error:
+            # @TODO maybe that's the message.  check the exceptions
+            'Invalid data'
+            abort(422)
+
+        return jsonify({
+            'success': True,
+            'game': column_vals
+            })
+
+    @app.route('/host/edit', methods=['PATCH'])
+    @requires_auth('create:game')
+    def edit_host(jwt_payload):
+        host_id = get_id(jwt_payload)
+        host = Host.query.get(host_id)
+        if host is None:
+            'must register first'
+            abort(404)
+
+        updates = {k: request.json[k] for k in ['name', 'email'] if k in request.json}
+
+        error = False
+        try:
+            host.update(updates)
+            formatted_host = host.format()
+        except Exception:
+            error = True
+            rollback()
+            print(sys.exc_info())
+        finally:
+            close_session()
+
+        if error:
+            # @TODO maybe that's the message.  check the exceptions
+            'Invalid data'
+            abort(422)
+
+        return jsonify({
+            'success': True,
+            'game': formatted_host
+            })
+
+    @app.route('/player/register', methods=['POST'])
+    @requires_auth('join:game')
+    def register_player(jwt_payload):
+        player_id = get_id(jwt_payload)
+        if Player.query.get(player_id):
+            'player already registered'
+            abort(403)
+        column_vals = {}
+        for kword in ['name', 'email']:
+            value = request.json.get(kword)
+            if value is None:
+                f'{kword} needed'
+                abort(422)
+            column_vals[kword] = value
+
+        error = False
+        try:
+            player = Player(player_id=player_id, **column_vals)
+            player.add()
+        except Exception:
+            error = True
+            rollback()
+            print(sys.exc_info())
+        finally:
+            close_session()
+
+        if error:
+            # @TODO maybe that's the message.  check the exceptions
+            'Invalid data'
+            abort(422)
+
+        return jsonify({
+            'success': True,
+            'game': column_vals
+            })
+
+    @app.route('/player/edit', methods=['PATCH'])
+    @requires_auth('join:game')
+    def edit_player(jwt_payload):
+        player_id = get_id(jwt_payload)
+        player = Player.query.get(player_id)
+        if player is None:
+            'must register first'
+            abort(404)
+
+        updates = {k: request.json[k] for k in ['name', 'email'] if k in request.json}
+
+        error = False
+        try:
+            player.update(updates)
+            formatted_player = player.format()
+        except Exception:
+            error = True
+            rollback()
+            print(sys.exc_info())
+        finally:
+            close_session()
+
+        if error:
+            # @TODO maybe that's the message.  check the exceptions
+            'Invalid data'
+            abort(422)
+
+        return jsonify({
+            'success': True,
+            'game': formatted_player
+            })
+
     @app.route('/game/create', methods=['POST'])
     @requires_auth('create:game')
     def create_game(jwt_payload):
