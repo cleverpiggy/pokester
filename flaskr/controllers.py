@@ -8,20 +8,23 @@ from .auth import requires_auth_dummy
 
 PAGE_LENGTH = 10
 
-def get_id(jwt_payload):
-    id_ = jwt_payload.get('sub')
-    #in case of testing without auth
-    if id_ is None:
-        id_ = request.args.get('user_id', type=str)
-    return id_
 
 
 def register_views(app):
 
     if app.config.get('TEST_WITHOUT_AUTH'):
         requires_auth = requires_auth_dummy
+        testing_without_auth = True
     else:
         requires_auth = req_auth
+        testing_without_auth = False
+
+    def get_id(jwt_payload):
+        id_ = jwt_payload.get('sub')
+        #in case of testing without auth
+        if id_ is None and testing_without_auth:
+            id_ = request.args.get('user_id', type=str)
+        return id_
 
     @app.route('/home')
     def index():
