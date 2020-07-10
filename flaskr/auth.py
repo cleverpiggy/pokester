@@ -1,7 +1,7 @@
 from os import environ
 from functools import wraps
 import json
-from flask import session, redirect, render_template, url_for, jsonify, request
+from flask import session, redirect, url_for, jsonify, request
 from dotenv import load_dotenv, find_dotenv
 # from authlib.integrations.flask_client import OAuth
 
@@ -37,33 +37,35 @@ def get_token_auth_header():
     """
     auth = request.headers.get("Authorization", None)
     if not auth:
-        raise AuthError({"code": "authorization_header_missing",
-                        "description":
-                            "Authorization header is expected"}, 401)
+        raise AuthError({
+            "code": "authorization_header_missing",
+            "description": "Authorization header is expected"
+            }, 401)
 
     parts = auth.split()
 
     if parts[0].lower() != "bearer":
-        raise AuthError({"code": "invalid_header",
-                        "description":
-                            "Authorization header must start with"
-                            " Bearer"}, 401)
+        raise AuthError({
+            "code": "invalid_header",
+            "description": "Authorization header must start with Bearer"
+            }, 401)
     elif len(parts) == 1:
-        raise AuthError({"code": "invalid_header",
-                        "description": "Token not found"}, 401)
+        raise AuthError({
+            "code": "invalid_header",
+            "description": "Token not found"
+            }, 401)
     elif len(parts) > 2:
-        raise AuthError({"code": "invalid_header",
-                        "description":
-                            "Authorization header must be"
-                            " Bearer token"}, 401)
+        raise AuthError({
+            "code": "invalid_header",
+            "description": "Authorization header must be"
+                           " Bearer token"
+            }, 401)
 
     token = parts[1]
     return token
 
 
-
-def verify_decode_jwt():
-    token = get_token_auth_header()
+def verify_decode_jwt(token):
     jsonurl = urlopen("https://" + AUTH0_DOMAIN + "/.well-known/jwks.json")
     jwks = json.loads(jsonurl.read())
     try:
@@ -72,13 +74,13 @@ def verify_decode_jwt():
         raise AuthError({
             "code": "invalid_header",
             "description": "Authorization malformed."
-        }, 401)
+            }, 401)
     rsa_key = {}
     if 'kid' not in unverified_header:
         raise AuthError({
             'code': 'invalid_header',
             'description': 'Authorization malformed.'
-        }, 401)
+            }, 401)
     for key in jwks["keys"]:
         if key["kid"] == unverified_header["kid"]:
             rsa_key = {
@@ -89,8 +91,10 @@ def verify_decode_jwt():
                 "e": key["e"]
             }
     if not rsa_key:
-        raise AuthError({"code": "invalid_header",
-                        "description": "Unable to find appropriate key"}, 401)
+        raise AuthError({
+            "code": "invalid_header",
+            "description": "Unable to find appropriate key"
+            }, 401)
     try:
         payload = jwt.decode(
             token,
@@ -100,18 +104,21 @@ def verify_decode_jwt():
             issuer="https://" + AUTH0_DOMAIN + "/"
         )
     except jwt.ExpiredSignatureError:
-        raise AuthError({"code": "token_expired",
-                        "description": "token is expired"}, 401)
+        raise AuthError({
+            "code": "token_expired",
+            "description": "token is expired"
+            }, 401)
     except jwt.JWTClaimsError:
-        raise AuthError({"code": "invalid_claims",
-                        "description":
-                            "incorrect claims,"
-                            "please check the audience and issuer"}, 401)
+        raise AuthError({
+            "code": "invalid_claims",
+            "description": "incorrect claims,"
+                           "please check the audience and issuer"
+            }, 401)
     except Exception:
-        raise AuthError({"code": "invalid_header",
-                        "description":
-                            "Unable to parse authentication"
-                            " token."}, 401)
+        raise AuthError({
+            "code": "invalid_header",
+            "description": "Unable to parse authentication token."
+            }, 401)
     return payload
 
 
@@ -123,12 +130,12 @@ def check_permissions(permission, payload):
         raise AuthError({
             'code': 'invalid_claims',
             'description': 'Permissions not included in JWT.'
-            }, status_code=401)
+            }, 401)
     if permission not in permissions:
         raise AuthError({
             'code': 'invalid_claims',
             'description': 'Permission not found.'
-            }, status_code=401)
+            }, 401)
     return True
 
 
@@ -136,7 +143,8 @@ def requires_auth(permission=''):
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            payload = verify_decode_jwt()
+            token = get_token_auth_header()
+            payload = verify_decode_jwt(token)
             check_permissions(permission, payload)
             return f(payload, *args, **kwargs)
 
@@ -154,9 +162,7 @@ def requires_auth_dummy(permission=''):
     return requires_auth_decorator
 
 
-# @TODO I don't think I'll need setup_auth now, these are just routes
 def setup_auth(app):
-
 
     # @TODO state is about mitigating a CSRF attack by attaching some random info,
     # store it on the client side (sessions), and AUTH0 will return the same string to check against
@@ -202,6 +208,13 @@ def setup_auth(app):
         # Note that it requires https and it cannot point to localhost.
         return redirect(authorize_url)
 
+    @app.route('/verify<token>', methods=['GET'])
+    def verify_decode_route(token):
+        payload = verify_decode_jwt(token)
+        return jsonify({
+            'permissions': payload['permissions'],
+            'success': True
+        })
 
     @app.route('/logout')
     def logout():
@@ -214,4 +227,3 @@ def setup_auth(app):
     #     # 1. clear the session cookies
     #     # 2. log out with auth0 api
     #     # https://YOUR_DOMAIN/v2/logout
-    #     return 'logged out!'
