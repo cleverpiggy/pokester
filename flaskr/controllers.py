@@ -1,6 +1,7 @@
 import sys
 from functools import wraps
-from flask import request, jsonify, abort, render_template, redirect, url_for
+from flask import (request, jsonify, abort,
+                   render_template, redirect, url_for)
 from .models import Host, Game, Player, Registration, rollback, close_session
 from .auth import requires_auth as req_auth
 from .auth import requires_auth_dummy
@@ -31,17 +32,15 @@ def register_views(app):
         # Return a list of games paginated
         # @TODO Optional json filters
         # default sorted by start time and n players
-        #     (but not full)
 
         # @TODO check out Model.paginate
-        # print (request.__dict__)
         page = request.args.get('page', 1, type=int)
         page_length = request.args.get("page_length", PAGE_LENGTH, type=int)
         offset = (page - 1) * page_length
         # @TODO add order by number of players
         q = Game.query.order_by(Game.start_time)
         if offset > q.count():
-            abort(404)
+            abort(404, description=f'Page number {page} is out of bounds')
         games = q.limit(page_length).offset(offset)
         formatted_games = [g.format() for g in games]
         return jsonify({
@@ -49,11 +48,11 @@ def register_views(app):
             'games': formatted_games
         })
 
-    @app.route('/game/players<int:game_id>')
+    @app.route('/game<int:game_id>/players')
     def players(game_id):
         # return the players in a game
         if Game.query.get(game_id) is None:
-            abort(404)
+            abort(404, description=f'Game id {game_id} not found.')
         players = Player.query.\
                          join(Registration).\
                          filter(Registration.game_id==game_id)
@@ -68,14 +67,12 @@ def register_views(app):
     def register_host(jwt_payload):
         host_id = get_id(jwt_payload)
         if Host.query.get(host_id):
-            'host already registered'
-            abort(403)
+            abort(403, description='Host already registered.')
         column_vals = {}
         for kword in ['name', 'email']:
             value = request.json.get(kword)
             if value is None:
-                f'{kword} needed'
-                abort(422)
+                abort(422, description=f'{kword} required')
             column_vals[kword] = value
 
         error = False
@@ -91,8 +88,7 @@ def register_views(app):
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
-            'Invalid data'
-            abort(422)
+            abort(422, description='Invalid data')
 
         return jsonify({
             'success': True,
@@ -105,8 +101,7 @@ def register_views(app):
         host_id = get_id(jwt_payload)
         host = Host.query.get(host_id)
         if host is None:
-            'must register first'
-            abort(404)
+            abort(404, description='Host must register before creating a game.')
 
         updates = {k: request.json[k] for k in ['name', 'email'] if k in request.json}
 
@@ -123,8 +118,7 @@ def register_views(app):
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
-            'Invalid data'
-            abort(422)
+            abort(422, description='Invalid data')
 
         return jsonify({
             'success': True,
@@ -136,14 +130,12 @@ def register_views(app):
     def register_player(jwt_payload):
         player_id = get_id(jwt_payload)
         if Player.query.get(player_id):
-            'player already registered'
-            abort(403)
+            abort(403, description='Player already registered')
         column_vals = {}
         for kword in ['name', 'email']:
             value = request.json.get(kword)
             if value is None:
-                f'{kword} needed'
-                abort(422)
+                abort(422, description=f'{kword} required')
             column_vals[kword] = value
 
         error = False
@@ -159,8 +151,7 @@ def register_views(app):
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
-            'Invalid data'
-            abort(422)
+            abort(422, description='Invalid data')
 
         return jsonify({
             'success': True,
@@ -173,8 +164,7 @@ def register_views(app):
         player_id = get_id(jwt_payload)
         player = Player.query.get(player_id)
         if player is None:
-            'must register first'
-            abort(404)
+            abort(404, description='Player must register first.')
 
         updates = {k: request.json[k] for k in ['name', 'email'] if k in request.json}
 
@@ -191,8 +181,7 @@ def register_views(app):
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
-            'Invalid data'
-            abort(422)
+            abort(422, description='Invalid data')
 
         return jsonify({
             'success': True,
@@ -207,8 +196,7 @@ def register_views(app):
         for kword in ['start_time', 'max_players', 'platform']:
             value = request.json.get(kword)
             if value is None:
-                f'{kword} needed'
-                abort(422)
+                abort(422, description=f'{kword} required')
             column_vals[kword] = value
 
         host_id = get_id(jwt_payload)
@@ -227,8 +215,7 @@ def register_views(app):
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
-            'Invalid data'
-            abort(422)
+            abort(422, description='Invalid data')
 
         return jsonify({
             'success': True,
@@ -244,16 +231,14 @@ def register_views(app):
 
         game = Game.query.get(game_id)
         if game is None:
-            abort(404)
+            abort(404, description=f"Game {game_id} not found.")
         if game.num_registered >= game.max_players:
-            'Game full'
-            abort(422)
+            abort(422, description=f'Game {game_id} is full.')
         if Registration.query.filter(
                 Registration.game_id == game_id,
                 Registration.player_id == player_id
                 ).one_or_none():
-            'Already registered'
-            abort(422)
+            abort(422, description=f"Player already registered for game {game_id}")
         game.num_registered += 1
         formatted_game = game.format()
 
@@ -285,9 +270,9 @@ def register_views(app):
         host_id = get_id(jwt_payload)
         game = Game.query.get(game_id)
         if game is None:
-            abort(404)
+            abort(404, description=f'Game {game_id} not found.')
         if game.host_id != host_id:
-            abort(403)
+            abort(403, description="Cannot delete someone else's game")
         game.delete()
 
         return jsonify({
@@ -303,14 +288,9 @@ def register_views(app):
 
         game = Game.query.get(game_id)
         if game is None:
-            abort(404)
+            abort(404, description=f'Game {game_id} not found.')
         if game.host_id != host_id:
-            abort(403)
-
-        # for kword in ['start_time', 'max_players', 'platform']:
-        #     val = request.json.get(kword)
-        #     if val:
-        #         setattr(game, kword, val)
+            abort(403, description="Cannot edit someone else's game")
 
         updates = {k: request.json[k] for k in ['start_time', 'max_players', 'platform'] if k in request.json}
 
@@ -328,8 +308,7 @@ def register_views(app):
 
         if error:
             # @TODO maybe that's the message.  check the exceptions
-            'Invalid data'
-            abort(422)
+            abort(422, description='Invalid data')
 
         return jsonify({
             'success': True,
@@ -344,7 +323,7 @@ def register_views(app):
 
         reg = Registration.query.filter_by(game_id=game_id, player_id=player_id).one_or_none()
         if reg is None:
-            abort(404)
+            abort(404, description=f'Player not registered for game {game_id}')
         game = Game.query.get(game_id)
         game.num_registered -= 1
         #this commits
@@ -356,3 +335,14 @@ def register_views(app):
             'success': True,
             'game': formatted_game
             })
+
+    def error_handler(error):
+        return jsonify({
+            'success': False,
+            'code': error.code,
+            'message': error.description,
+            'name': error.name
+            }), error.code
+
+    for code in (400, 403, 404, 422, 500):
+        app.register_error_handler(code, error_handler)
