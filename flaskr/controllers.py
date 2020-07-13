@@ -4,7 +4,7 @@ from flask import (request, jsonify, abort,
                    render_template, redirect, url_for)
 from .models import Host, Game, Player, Registration, rollback, close_session
 from .auth import requires_auth as req_auth
-from .auth import requires_auth_dummy
+from .auth import requires_auth_dummy, AuthError
 
 PAGE_LENGTH = 10
 
@@ -12,12 +12,11 @@ PAGE_LENGTH = 10
 
 def register_views(app):
 
-    if app.config.get('TEST_WITHOUT_AUTH'):
+    testing_without_auth = app.config.get('TEST_WITHOUT_AUTH')
+    if testing_without_auth:
         requires_auth = requires_auth_dummy
-        testing_without_auth = True
     else:
         requires_auth = req_auth
-        testing_without_auth = False
 
     def get_id(jwt_payload):
         id_ = jwt_payload.get('sub')
@@ -225,7 +224,7 @@ def register_views(app):
             'game': column_vals
             })
 
-    @app.route('/game/join/<int:game_id>', methods=['POST'])
+    @app.route('/game<int:game_id>/join', methods=['POST'])
     @requires_auth('join:game')
     def join_game(jwt_payload, game_id):
         # the user id has to be in the jwt_payload
@@ -283,7 +282,7 @@ def register_views(app):
             'game_id': game_id
             })
 
-    @app.route('/game/edit<int:game_id>', methods=['PATCH'])
+    @app.route('/game<int:game_id>/edit', methods=['PATCH'])
     @requires_auth('edit:game')
     def edit_game(jwt_payload, game_id):
 
@@ -318,7 +317,7 @@ def register_views(app):
             'game': formatted_game
             })
 
-    @app.route('/game/unregister<int:game_id>', methods=['DELETE'])
+    @app.route('/game<int:game_id>/unregister', methods=['DELETE'])
     @requires_auth('join:game')
     def unregister(jwt_payload, game_id):
 
@@ -343,9 +342,9 @@ def register_views(app):
         return jsonify({
             'success': False,
             'code': error.code,
-            'message': error.description,
+            'description': error.description,
             'name': error.name
             }), error.code
 
-    for code in (400, 403, 404, 422, 500):
+    for code in (400, 403, 404, 422, 500, AuthError):
         app.register_error_handler(code, error_handler)
