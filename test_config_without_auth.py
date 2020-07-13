@@ -1,2 +1,0 @@
-TESTING = True
-TEST_WITHOUT_AUTH = True

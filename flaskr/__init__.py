@@ -5,14 +5,14 @@ from .models import setup_db
 from .controllers import register_views
 from .auth import setup_auth
 
-def create_app(test_config=None):
+def create_app(test_config=None, dburl=None):
     app = Flask(__name__)
 
     # @TODO work out this config crap wrt heroku environ etc.
     if test_config:
-        app.config.from_object(test_config)
+        app.config.from_mapping(test_config)
 
-    dbpath = os.environ.get('DATABASE_URL')
+    dbpath = dburl or os.environ.get('DATABASE_URL')
     app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
     setup_db(app, dbpath)
 

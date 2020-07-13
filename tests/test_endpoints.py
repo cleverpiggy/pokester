@@ -1,37 +1,24 @@
-import os
 from datetime import datetime, timedelta
-from functools import wraps
 import pytest
-import populate_test_db
-from flaskr import create_app
 from flaskr.models import Host, Game, Player, Registration
+from flaskr import create_app
+from helpers import TEST_DB_URL
+
 
 # You do it like this
 # response = client.post('/xyz', json={'foo'})
 # response.status_code
 # response.json
-
 @pytest.fixture(scope='module')
-def app():
-    db_url = 'postgresql://cleverpiggy@localhost:5432/pokester_test_db'
-    os.environ['DATABASE_URL'] = db_url
-    os.system('dropdb pokester_test_db')
-    os.system('createdb pokester_test_db')
-
-    app = create_app('test_config_without_auth')
-    populate_test_db.do_it(db_url)
-    app.app_context().push()
-    return app
-
-
-@pytest.fixture(scope='module')
-def client(app):
-    return app.test_client()
-
-
+def client():
+    app = create_app({'TESTING': True, 'TEST_WITHOUT_AUTH': True}, dburl=TEST_DB_URL)
+    with app.app_context():
+        client = app.test_client()
+        return client
 
 
 def test_games(client):
+    print (client.application.config["SQLALCHEMY_DATABASE_URI"])
     response = client.get('/games')
     assert response.status_code == 200
     assert len(response.json['games']) > 0
@@ -48,13 +35,13 @@ def test_players(client):
     game = Game.query.filter_by(num_registered=5).first()
     num_registered = game.num_registered
     game_id = game.id
-    response = client.get(f'/game/players{game_id}')
+    response = client.get(f'/game{game_id}/players')
 
     assert response.status_code == 200
     assert len(response.json['players']) == num_registered
 
 
-def test_create_game(client, app):
+def test_create_game(client):
 
     host = Host.query.first()
     url = f'/game/create?user_id={host.id}'
@@ -102,7 +89,7 @@ def test_join_game(client):
     # Success ----------------------------------------------------------
     game = Game.query.filter_by(num_registered=0).first()
     assert game
-    url = f'/game/join/{game.id}?user_id={player_id}'
+    url = f'/game{game.id}/join?user_id={player_id}'
 
     # Use these to check on the game after request.
     num_registered = game.num_registered
@@ -123,14 +110,14 @@ def test_join_game(client):
     assert response.status_code == 422
 
     # game not found
-    response = client.post(f'/game/join/9999?user_id={player_id}')
+    response = client.post(f'/game9999/join?user_id={player_id}')
     assert response.status_code == 404
 
     # full game
     game = Game.query.filter(Game.max_players == Game.num_registered).\
                       join(Registration).\
                       filter(Registration.player_id != player_id).first()
-    response = client.post(f'/game/join/{game.id}?user_id={player_id}')
+    response = client.post(f'/game{game.id}/join?user_id={player_id}')
     assert response.status_code == 422
 
 
@@ -164,7 +151,7 @@ def test_edit_game(client):
     # Success ----------------------------------------------------------
     game = Game.query.filter_by(host_id=host_id).first()
     game_id = game.id
-    url = f'/game/edit{game_id}?user_id={host_id}'
+    url = f'/game{game_id}/edit?user_id={host_id}'
     #throw out microseconds because client/jsonify automatically
     #curtails datetime for some reason
     new_time = game.start_time.replace(microsecond=0) + timedelta(days=+1)
@@ -176,7 +163,7 @@ def test_edit_game(client):
     # Failures -------------------------------------------------------
     # host doesn't own game
     wrong_game = Game.query.filter(Game.host_id != host_id).first()
-    wrong_url = f'/game/edit{wrong_game.id}?user_id={host_id}'
+    wrong_url = f'/game{wrong_game.id}/edit?user_id={host_id}'
     response = client.patch(wrong_url, json={'start_time': new_time})
     assert response.status_code == 403
 
@@ -193,10 +180,9 @@ def test_unregister(client):
     game_id = game.id
     num_reged = game.num_registered
 
-    url = f'/game/unregister{game_id}?user_id={player_id}'
+    url = f'/game{game_id}/unregister?user_id={player_id}'
     # Success ----------------------------------------------------------
     response = client.delete(url)
-
     assert response.status_code == 200
     assert Registration.query.get(reg_id) is None
 
