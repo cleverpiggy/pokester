@@ -32,16 +32,13 @@ class BaseModel(db.Model):
         db.session.add(self)
         db.session.commit()
 
-    def format(self):
-        return repr(self)
-
     def delete(self):
         db.session.delete(self)
         db.session.commit()
 
     def update(self, mapping=None, **kwargs):
         if mapping is None:
-            kwargs = mapping
+            mapping = kwargs
         for k, v in mapping.items():
             setattr(self, k, v)
         db.session.commit()
