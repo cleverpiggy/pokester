@@ -1,14 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title></title>
+    <title>Host Zoom Poker Homes Games</title>
+    <link rel="stylesheet" type="text/css" href="/static/thecss.css">
 </head>
 <body>
-    <div class="login-box auth0-box before">
+    <div>
         <img src="https://i.cloudup.com/StzWWrY34s.png" />
-        <h3>Auth0 Example</h3>
+         <p><a href="/login">Log In</a></p>
+        <p><a href="/logout" id="logout">Log Out</a></p>
         <p>Zero friction identity infrastructure, built for developers</p>
-        <a class="btn btn-primary btn-lg btn-login btn-block" href="/login">Log In</a>
+        <button id="sick_button">Click here</button>
+    </div>
+    <div class="games">
+        <h3>Games</h3>
+        <table id="games-table" class="games-table">
+            <tr class="games-table">
+                <th class="games-table">Platform</th>
+                <th class="games-table">Starts</th>
+                <th class="games-table">Host ID</th>
+                <th class="games-table">Players</th>
+                <th class="games-table">Max</th>
+                <th class="games-table">Game ID</th>
+            </tr>
+        </table>
+        <table id="players-table" class="hidden">
+        </table>
+        <button id="back-button" class="hidden">Back to Games</button>
     </div>
 </body>
+<script src="/static/thejavascript.js"></script>
 </html>
